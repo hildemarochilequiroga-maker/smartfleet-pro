@@ -479,11 +479,220 @@ After completing this setup:
 
 ---
 
+## 12. Procedimiento de Rotación de Credenciales
+
+### 12.1 Política de Rotación
+
+**Frecuencia recomendada:**
+- Service Account Keys: Cada 90 días
+- Firebase Tokens CI/CD: Cada 180 días
+- API Keys: No requieren rotación (solo si hay compromiso)
+
+### 12.2 Rotación de Service Account Keys
+
+**Cuándo rotar:**
+- ✅ Cada 90 días (calendario)
+- ✅ Si un empleado con acceso deja el equipo
+- ✅ Si se sospecha compromiso de seguridad
+- ✅ Después de un incidente de seguridad
+
+**Procedimiento paso a paso:**
+
+#### Paso 1: Generar nueva clave (5 min)
+
+```bash
+# Para cada ambiente (dev, staging, prod)
+
+1. Ve a Firebase Console → Project Settings → Service Accounts
+   https://console.firebase.google.com/project/smartfleet-pro-{ENVIRONMENT}/settings/serviceaccounts/adminsdk
+
+2. Click "Generate New Private Key"
+
+3. Descargar archivo JSON
+   Nombre sugerido: service-account-{ENVIRONMENT}-YYYYMMDD.json
+
+4. Guardar en ubicación segura temporalmente
+   (NO commitear al repositorio)
+```
+
+#### Paso 2: Actualizar GitHub Secrets (10 min)
+
+```bash
+# 1. Convertir JSON a una línea
+$json = Get-Content "path\to\service-account-dev-20250221.json" -Raw
+$json -replace "`n", "" -replace "`r", "" | Set-Clipboard
+
+# 2. Ir a GitHub Settings → Secrets and Variables → Actions
+https://github.com/hildemarochilequiroga-maker/smartfleet-pro/settings/secrets/actions
+
+# 3. Editar cada secret:
+#    - FIREBASE_SERVICE_ACCOUNT_DEV
+#    - FIREBASE_SERVICE_ACCOUNT_STAGING  
+#    - FIREBASE_SERVICE_ACCOUNT_PROD
+
+# 4. Pegar el nuevo JSON (una línea) en cada uno
+```
+
+#### Paso 3: Actualizar archivo local (si aplica)
+
+```bash
+# Si tienes service account en local para desarrollo:
+cd firebase/functions
+# Reemplazar archivo (asegurar que está en .gitignore)
+cp ~/Downloads/service-account-dev-20250221.json service-account.json
+
+# Verificar que NO se sube a Git
+git status  # No debe aparecer service-account.json
+```
+
+#### Paso 4: Probar nueva configuración (10 min)
+
+```bash
+# 1. Ejecutar workflow de GitHub Actions manualmente
+#    Ve a: Actions → Deploy to Development → Run workflow
+
+# 2. Verificar que el deploy funciona correctamente
+
+# 3. Si falla, revertir al secret anterior temporalmente
+```
+
+#### Paso 5: Eliminar clave antigua (CRÍTICO)
+
+```bash
+# 1. Ve a Firebase Console → Service Accounts
+# 2. Identificar la clave antigua (por fecha de creación)
+# 3. Click en los 3 puntos → "Delete"
+# 4. Confirmar eliminación
+
+# ⚠️ IMPORTANTE: 
+# - Solo eliminar DESPUÉS de verificar que la nueva funciona
+# - Guardar respaldo de la clave antigua por 7 días
+# - Documentar la rotación en changelog
+```
+
+### 12.3 Rotación de Firebase CI/CD Tokens
+
+**Procedimiento:**
+
+```bash
+# 1. Generar nuevo token
+firebase login:ci
+
+# Copiar el token generado
+# Ejemplo: 1//0xxx...
+
+# 2. Actualizar en GitHub Secrets (mismo procedimiento que arriba):
+#    - FIREBASE_TOKEN_DEV
+#    - FIREBASE_TOKEN_STAGING
+#    - FIREBASE_TOKEN_PROD
+
+# 3. Probar workflow
+
+# 4. El token anterior se invalida automáticamente al logout
+firebase logout
+```
+
+### 12.4 Checklist de Rotación
+
+**Antes de rotar:**
+- [ ] Notificar al equipo con 24h de anticipación
+- [ ] Programar ventana de mantenimiento (si aplica)
+- [ ] Backup de configuración actual
+- [ ] Verificar que GitHub Actions está funcionando
+
+**Durante rotación:**
+- [ ] Generar nuevas credenciales
+- [ ] Actualizar GitHub Secrets
+- [ ] Actualizar archivos locales (si aplica)
+- [ ] Probar en ambiente de desarrollo primero
+- [ ] Probar en staging
+- [ ] Probar en producción
+
+**Después de rotar:**
+- [ ] Eliminar credenciales antiguas
+- [ ] Documentar en changelog
+- [ ] Actualizar calendario de próxima rotación
+- [ ] Archivar credenciales antiguas (7 días de respaldo)
+
+### 12.5 Plantilla de Comunicación
+
+```
+ASUNTO: [PROGRAMADO] Rotación de credenciales Firebase - {FECHA}
+
+Equipo,
+
+Se realizará la rotación programada de credenciales Firebase:
+
+📅 Fecha: {FECHA}
+⏰ Hora: {HORA} 
+🕐 Duración estimada: 30 minutos
+🎯 Ambientes: Dev, Staging, Producción
+
+Acciones requeridas:
+- Desarrolladores: Actualizar service account local (si aplica)
+- DevOps: Verificar workflows post-rotación
+
+Durante la rotación:
+- ✅ Aplicación móvil: Sin impacto
+- ✅ Web admin: Sin impacto
+- ⚠️ GitHub Actions: Puede fallar temporalmente
+
+Contacto: {RESPONSABLE}
+
+Gracias,
+DevOps Team
+```
+
+### 12.6 Registro de Rotaciones
+
+| Fecha | Ambiente | Tipo | Razón | Responsable | Status |
+|-------|----------|------|-------|-------------|--------|
+| 2025-11-21 | Todos | Service Account | Setup inicial | Hildemaro Chile | ✅ Completado |
+| 2026-02-21 | Todos | Service Account | Rotación programada 90 días | TBD | 📅 Programado |
+
+**Próximas rotaciones programadas:**
+- **Service Accounts:** 21 de Febrero, 2026
+- **Firebase Tokens:** 20 de Mayo, 2026
+
+---
+
+## 13. Troubleshooting
+
+### Problema: GitHub Actions falla después de rotación
+
+**Síntomas:**
+```
+Error: Failed to authenticate with Firebase
+Status: 401 Unauthorized
+```
+
+**Solución:**
+1. Verificar que el secret en GitHub está actualizado
+2. Asegurar que el JSON está en UNA sola línea (sin saltos de línea)
+3. Verificar que no hay espacios extras al inicio/final
+4. Regenerar service account si el problema persiste
+
+### Problema: Service account eliminado accidentalmente
+
+**Solución:**
+1. Generar nuevo service account inmediatamente
+2. Actualizar GitHub Secrets
+3. Ejecutar workflow de prueba
+4. Documentar incidente
+
+**Prevención:**
+- Siempre crear nuevo antes de eliminar antiguo
+- Mantener respaldo por 7 días
+- Verificar funcionamiento antes de eliminar
+
+---
+
 ## Changelog
 
 | Date | Version | Changes | Author |
 |------|---------|---------|--------|
 | 2025-11-21 | 1.0 | Initial documentation | SmartFleet Team |
+| 2025-11-21 | 1.1 | Added credential rotation procedures (AC5) | Hildemaro Chile |
 
 ---
 
