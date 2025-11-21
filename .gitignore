@@ -1,0 +1,94 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ============================================
+# Firebase & Environment Configuration
+# ============================================
+# CRITICAL: Never commit these files to version control
+# They contain sensitive credentials and API keys
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.development
+.env.staging
+.env.production
+
+# Firebase service account keys
+firebase/config/firebase-config-dev.json
+firebase/config/firebase-config-staging.json
+firebase/config/firebase-config-prod.json
+firebase/config/*.json
+!firebase/config/*.template
+
+# Service account keys
+**/serviceAccountKey*.json
+**/service-account*.json
+**/*-service-account.json
+
+# Firebase cache and debug
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+
+# Firebase Functions
+firebase/functions/node_modules/
+firebase/functions/lib/
+firebase/functions/.env
+firebase/functions/.runtimeconfig.json
+
+# Google Services (Android/iOS)
+google-services.json
+GoogleService-Info.plist
+
+# Cloud Functions secrets
+firebase/functions/.secret.local
+
+# Service Account Keys
+firebase/functions/service-account*.json
+**/service-account*.json

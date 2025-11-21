@@ -1,0 +1,192 @@
+rules_version = '2';
+
+// SmartFleet Pro - Firestore Security Rules
+// Last updated: 2025-11-21
+// Version: 1.0.0 (US-003 Implementation)
+//
+// Security Model:
+// - Multi-tenant isolation by company_id
+// - Role-based access control (admin, driver, operator)
+// - Principle of least privilege
+//
+// Roles:
+// - admin: Full access to company data, can manage users and vehicles
+// - driver: Read own trips and assigned vehicle, update trip status
+// - operator: Read company data, create trips (future)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // Helper Functions
+    // ============================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user belongs to a specific company
+    function belongsToCompany(companyId) {
+      return isAuthenticated() && 
+             request.auth.token.company_id == companyId;
+    }
+    
+    // Check if user is admin of their company
+    function isAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.role == 'admin';
+    }
+    
+    // Check if user is a driver
+    function isDriver() {
+      return isAuthenticated() && 
+             request.auth.token.role == 'driver';
+    }
+    
+    // Check if user is admin of the specified company
+    function isAdminOfCompany(companyId) {
+      return isAdmin() && belongsToCompany(companyId);
+    }
+    
+    // Get user ID from auth token
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    // Check if document belongs to user's company
+    function isOwnCompanyData() {
+      return belongsToCompany(resource.data.company_id);
+    }
+    
+    // Check if incoming data belongs to user's company
+    function isIncomingCompanyData() {
+      return belongsToCompany(request.resource.data.company_id);
+    }
+    
+    // Validate that company_id is not changed
+    function companyIdUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['company_id']);
+    }
+    
+    // ============================================
+    // Collection: companies
+    // ============================================
+    match /companies/{companyId} {
+      // Read: Users can read their own company
+      allow read: if belongsToCompany(companyId);
+      
+      // Create: Not allowed via Firestore (use Cloud Functions or Admin SDK)
+      allow create: if false;
+      
+      // Update: Only admins can update their own company
+      allow update: if isAdminOfCompany(companyId) &&
+                      request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['name', 'address', 'updated_at']);
+      
+      // Delete: Not allowed (soft delete via is_active flag)
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // Collection: users
+    // ============================================
+    match /users/{userId} {
+      // Read: Users can read their own profile, admins can read all users in company
+      allow read: if (isAuthenticated() && userId == getUserId()) ||
+                     (isOwnCompanyData() && isAdmin());
+      
+      // Create: Only admins can create users in their company
+      allow create: if isAdmin() && 
+                      isIncomingCompanyData() &&
+                      request.resource.data.keys().hasAll(['id', 'company_id', 'email', 'full_name', 'role', 'is_active', 'created_at', 'updated_at']) &&
+                      request.resource.data.role in ['admin', 'driver', 'operator'];
+      
+      // Update: Users can update their own profile (limited fields), admins can update all
+      allow update: if (userId == getUserId() && 
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['full_name', 'phone', 'updated_at'])) ||
+                      (isOwnCompanyData() && isAdmin() && companyIdUnchanged());
+      
+      // Delete: Only admins can soft delete users (via is_active)
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // Collection: vehicles
+    // ============================================
+    match /vehicles/{vehicleId} {
+      // Read: Drivers can read their assigned vehicle, admins can read all company vehicles
+      allow read: if (isOwnCompanyData() && isDriver() && resource.data.assigned_driver_id == getUserId()) ||
+                     (isOwnCompanyData() && isAdmin());
+      
+      // Create: Only admins can create vehicles
+      allow create: if isAdmin() && 
+                      isIncomingCompanyData() &&
+                      request.resource.data.keys().hasAll(['id', 'company_id', 'license_plate', 'brand', 'model', 'year', 'vehicle_type', 'status', 'created_at', 'updated_at']);
+      
+      // Update: Only admins can update vehicles, company_id cannot change
+      allow update: if isOwnCompanyData() && isAdmin() && companyIdUnchanged();
+      
+      // Delete: Only admins can delete vehicles
+      allow delete: if isOwnCompanyData() && isAdmin();
+    }
+    
+    // ============================================
+    // Collection: trips
+    // ============================================
+    match /trips/{tripId} {
+      // Read: Drivers can read trips assigned to them, admins can read all company trips
+      allow read: if (isOwnCompanyData() && isDriver() && resource.data.driver_id == getUserId()) ||
+                     (isOwnCompanyData() && isAdmin());
+      
+      // Create: Only admins can create trips
+      allow create: if isAdmin() && 
+                      isIncomingCompanyData() &&
+                      request.resource.data.keys().hasAll(['id', 'company_id', 'vehicle_id', 'driver_id', 'origin', 'destination', 'status', 'scheduled_start', 'created_at', 'updated_at']);
+      
+      // Update: Drivers can update status and actual times of their trips, admins can update all
+      allow update: if (isOwnCompanyData() && 
+                       isDriver() && 
+                       resource.data.driver_id == getUserId() &&
+                       companyIdUnchanged() &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'actual_start', 'actual_end', 'distance_km', 'updated_at'])) ||
+                      (isOwnCompanyData() && isAdmin() && companyIdUnchanged());
+      
+      // Delete: Only admins can delete trips
+      allow delete: if isOwnCompanyData() && isAdmin();
+      
+      // ============================================
+      // Subcollection: route_points
+      // ============================================
+      match /route_points/{pointId} {
+        // Read: Same permissions as parent trip
+        allow read: if (get(/databases/$(database)/documents/trips/$(tripId)).data.driver_id == getUserId()) ||
+                       (belongsToCompany(get(/databases/$(database)/documents/trips/$(tripId)).data.company_id) && isAdmin());
+        
+        // Create: Drivers can add route points to their trips, admins can add to any company trip
+        allow create: if (get(/databases/$(database)/documents/trips/$(tripId)).data.driver_id == getUserId() && isDriver()) ||
+                         (belongsToCompany(get(/databases/$(database)/documents/trips/$(tripId)).data.company_id) && isAdmin());
+        
+        // Update/Delete: Not allowed (route points are append-only)
+        allow update, delete: if false;
+      }
+    }
+    
+    // ============================================
+    // Collection: _counters (internal use only)
+    // ============================================
+    match /_counters/{counterId} {
+      // Only accessible via Cloud Functions with Admin SDK
+      allow read, write: if false;
+    }
+    
+    // ============================================
+    // Default: Deny all other access
+    // ============================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,233 @@
+name: Pull Request Checks
+
+# Run checks on all pull requests
+on:
+  pull_request:
+    branches:
+      - develop
+      - staging
+      - main
+    paths:
+      - 'firebase/**'
+      - '.github/workflows/**'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ============================================
+  # Job 1: Lint Code
+  # ============================================
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: firebase/functions/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./firebase/functions
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./firebase/functions
+        run: npm run lint
+
+      - name: Comment PR - Lint Failed
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **ESLint Failed**\n\nPlease fix linting errors before merging.'
+            })
+
+  # ============================================
+  # Job 2: Test Firestore Rules
+  # ============================================
+  test-rules:
+    name: Test Firestore Rules
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: firebase/package-lock.json
+
+      - name: Install Firebase dependencies
+        working-directory: ./firebase
+        run: npm ci
+
+      - name: Install Java (for Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Cache Firebase emulators
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Run Firestore Rules Tests
+        working-directory: ./firebase
+        run: npx firebase emulators:exec --only firestore "npm test"
+
+      - name: Comment PR - Tests Status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? '✅' : '❌';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${status} **Firestore Rules Tests ${status === '✅' ? 'Passed' : 'Failed'}**`
+            })
+
+  # ============================================
+  # Job 3: Build TypeScript
+  # ============================================
+  build:
+    name: Build TypeScript
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: firebase/functions/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./firebase/functions
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: ./firebase/functions
+        run: npm run build
+
+  # ============================================
+  # Job 4: Security Check
+  # ============================================
+  security:
+    name: Security Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run npm audit
+        working-directory: ./firebase/functions
+        run: |
+          npm audit --audit-level=high || echo "⚠️  Security vulnerabilities found"
+          npm audit --json > audit-results.json || true
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit
+          path: firebase/functions/audit-results.json
+          retention-days: 30
+
+  # ============================================
+  # Job 5: Code Quality Report
+  # ============================================
+  quality-report:
+    name: Code Quality Report
+    runs-on: ubuntu-latest
+    needs: [lint, test-rules, build]
+    if: always()
+    
+    steps:
+      - name: Generate PR Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lintStatus = '${{ needs.lint.result }}' === 'success' ? '✅' : '❌';
+            const testStatus = '${{ needs.test-rules.result }}' === 'success' ? '✅' : '❌';
+            const buildStatus = '${{ needs.build.result }}' === 'success' ? '✅' : '❌';
+            
+            const body = `
+            ## 🔍 Pull Request Checks Summary
+            
+            | Check | Status |
+            |-------|--------|
+            | Lint | ${lintStatus} |
+            | Firestore Rules Tests | ${testStatus} |
+            | TypeScript Build | ${buildStatus} |
+            
+            ${lintStatus === '✅' && testStatus === '✅' && buildStatus === '✅' 
+              ? '✅ **All checks passed!** This PR is ready for review.' 
+              : '❌ **Some checks failed.** Please review the errors above.'}
+            
+            ---
+            <sub>Automated checks by GitHub Actions</sub>
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            })
+
+  # ============================================
+  # Job 6: Size Check (Optional)
+  # ============================================
+  size-check:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: ./firebase/functions
+        run: npm ci
+
+      - name: Build
+        working-directory: ./firebase/functions
+        run: npm run build
+
+      - name: Check bundle size
+        working-directory: ./firebase/functions
+        run: |
+          SIZE=$(du -sh lib | cut -f1)
+          echo "Bundle size: $SIZE"
+          echo "⚠️  Monitor bundle size to optimize cold start times"

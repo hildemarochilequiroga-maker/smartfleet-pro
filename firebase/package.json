@@ -1,0 +1,13 @@
+{
+  "name": "smartfleet-firebase-rules",
+  "version": "1.0.0",
+  "description": "Firebase Security Rules Tests for SmartFleet Pro",
+  "scripts": {
+    "test": "mocha firestore.rules.test.js --timeout 10000",
+    "test:watch": "mocha firestore.rules.test.js --watch --timeout 10000"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "mocha": "^11.7.5"
+  }
+}

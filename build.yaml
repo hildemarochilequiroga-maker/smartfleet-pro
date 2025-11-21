@@ -1,0 +1,35 @@
+# Build runner configuration
+targets:
+  $default:
+    builders:
+      freezed:
+        enabled: true
+        options:
+          # Generate copyWith method
+          copy_with: true
+          # Generate == operator
+          equal: true
+          # Generate toString method  
+          to_string: true
+          # Generate when/map methods
+          map: true
+          # Generate maybeWhen/maybeMap methods
+          maybe_map: true
+      
+      json_serializable:
+        enabled: true
+        options:
+          # Generate field names as-is
+          field_rename: none
+          # Include fields with null values
+          include_if_null: false
+          # Generate explicit toJson methods
+          explicit_to_json: true
+          # Generate checked factories
+          checked: true
+      
+      riverpod_generator:
+        enabled: true
+        options:
+          # Generate keep alive providers
+          keep_alive: false

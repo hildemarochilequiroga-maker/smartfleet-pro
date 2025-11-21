@@ -1,0 +1,27 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user belongs to a company
+    function belongsToCompany(companyId) {
+      return isAuthenticated() && 
+             request.auth.token.company_id == companyId;
+    }
+
+    // Temporary rule - allow authenticated users to read/write their company's files
+    match /companies/{companyId}/{allPaths=**} {
+      allow read, write: if belongsToCompany(companyId);
+    }
+
+    // User profile images
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+  }
+}

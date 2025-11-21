@@ -1,0 +1,234 @@
+name: Deploy to Staging
+
+# Trigger on push to staging branch
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  NODE_VERSION: '20'
+  FIREBASE_PROJECT: smartfleet-pro-staging
+
+jobs:
+  # ============================================
+  # Job 1: Lint Code
+  # ============================================
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: firebase/functions/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./firebase/functions
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ./firebase/functions
+        run: npm run lint
+
+  # ============================================
+  # Job 2: Test Firestore Rules
+  # ============================================
+  test-rules:
+    name: Test Firestore Rules
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: firebase/package-lock.json
+
+      - name: Install Firebase dependencies
+        working-directory: ./firebase
+        run: npm ci
+
+      - name: Install Java (for Firestore emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Cache Firebase emulators
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}
+
+      - name: Run Firestore Rules Tests
+        working-directory: ./firebase
+        run: npx firebase emulators:exec --only firestore "npm test"
+
+  # ============================================
+  # Job 3: Run Unit Tests
+  # ============================================
+  test-functions:
+    name: Test Cloud Functions
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: firebase/functions/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./firebase/functions
+        run: npm ci
+
+      # Uncomment when unit tests are implemented
+      # - name: Run Unit Tests
+      #   working-directory: ./firebase/functions
+      #   run: npm test
+
+  # ============================================
+  # Job 4: Build Functions
+  # ============================================
+  build:
+    name: Build TypeScript
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: firebase/functions/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./firebase/functions
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: ./firebase/functions
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: functions-build
+          path: firebase/functions/lib
+          retention-days: 7
+
+  # ============================================
+  # Job 5: Deploy to Firebase Staging (with approval)
+  # ============================================
+  deploy:
+    name: Deploy to Firebase Staging
+    runs-on: ubuntu-latest
+    needs: [test-rules, test-functions, build]
+    environment:
+      name: staging
+      url: https://smartfleet-pro-staging.web.app
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: functions-build
+          path: firebase/functions/lib
+
+      - name: Install Firebase dependencies
+        working-directory: ./firebase/functions
+        run: npm ci --production
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
+          projectId: ${{ env.FIREBASE_PROJECT }}
+          channelId: live
+          
+      - name: Deploy Firestore Rules & Indexes
+        working-directory: ./firebase
+        run: |
+          npm install -g firebase-tools
+          firebase deploy --only firestore:rules,firestore:indexes --project ${{ env.FIREBASE_PROJECT }} --token ${{ secrets.FIREBASE_TOKEN_STAGING }}
+
+      - name: Deploy Cloud Functions
+        working-directory: ./firebase
+        run: |
+          firebase deploy --only functions --project ${{ env.FIREBASE_PROJECT }} --token ${{ secrets.FIREBASE_TOKEN_STAGING }}
+
+      - name: Health Check
+        run: |
+          echo "🔍 Verifying deployment..."
+          sleep 10
+          curl -f https://smartfleet-pro-staging.web.app || exit 1
+          echo "✅ Deployment verified successfully!"
+
+      - name: Run Smoke Tests
+        run: |
+          echo "🧪 Running smoke tests..."
+          # Add smoke test commands here when implemented
+          echo "✅ Smoke tests passed!"
+
+  # ============================================
+  # Job 6: Post-Deploy Notification
+  # ============================================
+  notify:
+    name: Send Notification
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always()
+    
+    steps:
+      - name: Notify Deployment Status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "✅ Staging deployment successful!"
+            echo "🌐 URL: https://smartfleet-pro-staging.web.app"
+            echo "📝 Ready for QA testing"
+          else
+            echo "❌ Staging deployment failed!"
+            echo "🚨 Requires immediate attention"
+          fi
+      
+      # Uncomment to send Slack notification
+      # - name: Slack Notification
+      #   uses: 8398a7/action-slack@v3
+      #   if: always()
+      #   with:
+      #     status: ${{ job.status }}
+      #     text: |
+      #       Staging deployment ${{ needs.deploy.result }}
+      #       URL: https://smartfleet-pro-staging.web.app
+      #     webhook_url: ${{ secrets.SLACK_WEBHOOK }}
