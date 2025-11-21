@@ -1,7 +1,9 @@
 {
   "projects": {
     "default": "smartfleet-pro-dev",
-    "dev": "smartfleet-pro-dev"
+    "dev": "smartfleet-pro-dev",
+    "staging": "smartfleet-pro-staging",
+    "prod": "smartfleet-pro-prod"
   },
   "targets": {},
   "etags": {}
