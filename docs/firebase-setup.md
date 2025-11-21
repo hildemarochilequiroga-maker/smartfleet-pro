@@ -34,9 +34,9 @@ We use a consistent naming pattern across all Firebase projects:
 
 | Environment | Project ID | Firebase Console URL |
 |-------------|------------|---------------------|
-| **Development** | `smartfleet-dev` | https://console.firebase.google.com/project/smartfleet-dev |
-| **Staging** | `smartfleet-staging` | https://console.firebase.google.com/project/smartfleet-staging |
-| **Production** | `smartfleet-prod` | https://console.firebase.google.com/project/smartfleet-prod |
+| **Development** | `smartfleet-pro-dev` | https://console.firebase.google.com/project/smartfleet-pro-dev |
+| **Staging** | `smartfleet-pro-staging` | https://console.firebase.google.com/project/smartfleet-pro-staging |
+| **Production** | `smartfleet-pro-prod` | https://console.firebase.google.com/project/smartfleet-pro-prod |
 
 ### Services Enabled
 
@@ -84,18 +84,18 @@ firebase login
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Click **"Add project"**
-3. Enter project name: **`smartfleet-dev`**
+3. Enter project name: **`smartfleet-pro-dev`**
 4. **Disable** Google Analytics (can be enabled later if needed)
 5. Click **"Create project"**
 6. Wait for project creation to complete
 
 #### 1.2 Create Staging Project
 
-Repeat the above steps with project name: **`smartfleet-staging`**
+Repeat the above steps with project name: **`smartfleet-pro-staging`**
 
 #### 1.3 Create Production Project
 
-Repeat the above steps with project name: **`smartfleet-prod`**
+Repeat the above steps with project name: **`smartfleet-pro-prod`**
 
 ---
 
@@ -159,9 +159,9 @@ For **each environment**:
 5. Click **"Done"**
 
 **Default Bucket Names:**
-- Dev: `smartfleet-dev.appspot.com`
-- Staging: `smartfleet-staging.appspot.com`
-- Prod: `smartfleet-prod.appspot.com`
+- Dev: `smartfleet-pro-dev.appspot.com`
+- Staging: `smartfleet-pro-staging.appspot.com`
+- Prod: `smartfleet-pro-prod.appspot.com`
 
 ---
 
@@ -174,9 +174,9 @@ For **each environment**:
 3. Follow the wizard (skip deployment for now)
 
 **Hosting URLs:**
-- Dev: `https://smartfleet-dev.web.app`
-- Staging: `https://smartfleet-staging.web.app`
-- Prod: `https://smartfleet-prod.web.app`
+- Dev: `https://smartfleet-pro-dev.web.app`
+- Staging: `https://smartfleet-pro-staging.web.app`
+- Prod: `https://smartfleet-pro-prod.web.app`
 
 ---
 
@@ -289,11 +289,11 @@ For **each environment**:
 #### 9.1 Create Service Account (per environment)
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Select your project (e.g., `smartfleet-dev`)
+2. Select your project (e.g., `smartfleet-pro-dev`)
 3. Go to **IAM & Admin** → **Service Accounts**
 4. Click **"Create Service Account"**
 5. Enter details:
-   - **Name:** `smartfleet-dev-ci-cd`
+   - **Name:** `smartfleet-pro-dev-ci-cd`
    - **Description:** "Service account for CI/CD deployments"
 6. Click **"Create and continue"**
 7. Grant roles:
@@ -319,9 +319,9 @@ For **each environment**:
 
    | Secret Name | Value |
    |-------------|-------|
-   | `FIREBASE_SERVICE_ACCOUNT_DEV` | Contents of `smartfleet-dev-xxxx.json` |
-   | `FIREBASE_SERVICE_ACCOUNT_STAGING` | Contents of `smartfleet-staging-xxxx.json` |
-   | `FIREBASE_SERVICE_ACCOUNT_PROD` | Contents of `smartfleet-prod-xxxx.json` |
+   | `FIREBASE_SERVICE_ACCOUNT_DEV` | Contents of `smartfleet-pro-dev-xxxx.json` |
+   | `FIREBASE_SERVICE_ACCOUNT_STAGING` | Contents of `smartfleet-pro-staging-xxxx.json` |
+   | `FIREBASE_SERVICE_ACCOUNT_PROD` | Contents of `smartfleet-pro-prod-xxxx.json` |
 
 4. Click **"Add secret"**
 
@@ -329,7 +329,7 @@ For **each environment**:
 
 ```bash
 # Encode service account key to base64
-cat smartfleet-dev-xxxx.json | base64 > key.base64.txt
+cat smartfleet-pro-dev-xxxx.json | base64 > key.base64.txt
 # Copy contents of key.base64.txt to GitHub Secret
 ```
 
@@ -365,33 +365,33 @@ Each service account should have **minimum necessary permissions**:
 
 ### Firebase Console
 
-- **Dev:** https://console.firebase.google.com/project/smartfleet-dev
-- **Staging:** https://console.firebase.google.com/project/smartfleet-staging
-- **Production:** https://console.firebase.google.com/project/smartfleet-prod
+- **Dev:** https://console.firebase.google.com/project/smartfleet-pro-dev
+- **Staging:** https://console.firebase.google.com/project/smartfleet-pro-staging
+- **Production:** https://console.firebase.google.com/project/smartfleet-pro-prod
 
 ### Firestore Console
 
-- **Dev:** https://console.firebase.google.com/project/smartfleet-dev/firestore
-- **Staging:** https://console.firebase.google.com/project/smartfleet-staging/firestore
-- **Production:** https://console.firebase.google.com/project/smartfleet-prod/firestore
+- **Dev:** https://console.firebase.google.com/project/smartfleet-pro-dev/firestore
+- **Staging:** https://console.firebase.google.com/project/smartfleet-pro-staging/firestore
+- **Production:** https://console.firebase.google.com/project/smartfleet-pro-prod/firestore
 
 ### Cloud Functions URLs
 
-- **Dev:** `https://us-central1-smartfleet-dev.cloudfunctions.net/<function_name>`
-- **Staging:** `https://us-central1-smartfleet-staging.cloudfunctions.net/<function_name>`
-- **Production:** `https://us-central1-smartfleet-prod.cloudfunctions.net/<function_name>`
+- **Dev:** `https://us-central1-smartfleet-pro-dev.cloudfunctions.net/<function_name>`
+- **Staging:** `https://us-central1-smartfleet-pro-staging.cloudfunctions.net/<function_name>`
+- **Production:** `https://us-central1-smartfleet-pro-prod.cloudfunctions.net/<function_name>`
 
 ### Firebase Hosting
 
-- **Dev:** https://smartfleet-dev.web.app
-- **Staging:** https://smartfleet-staging.web.app
-- **Production:** https://smartfleet-prod.web.app
+- **Dev:** https://smartfleet-pro-dev.web.app
+- **Staging:** https://smartfleet-pro-staging.web.app
+- **Production:** https://smartfleet-pro-prod.web.app
 
 ### Cloud Storage Buckets
 
-- **Dev:** `gs://smartfleet-dev.appspot.com`
-- **Staging:** `gs://smartfleet-staging.appspot.com`
-- **Production:** `gs://smartfleet-prod.appspot.com`
+- **Dev:** `gs://smartfleet-pro-dev.appspot.com`
+- **Staging:** `gs://smartfleet-pro-staging.appspot.com`
+- **Production:** `gs://smartfleet-pro-prod.appspot.com`
 
 ---
 
